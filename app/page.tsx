@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import VantaBackground from "./components/VantaBackground";
 
 interface Question {
   id: number;
@@ -18,8 +19,8 @@ export default function Home() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [newQuestion, setNewQuestion] = useState("");
+  const [sliderValues, setSliderValues] = useState<Record<number, number>>({});
 
-  // Fetch questions and grades from the database
   useEffect(() => {
     const fetchData = async () => {
       const questionResponse = await fetch("/api/questions");
@@ -29,11 +30,17 @@ export default function Home() {
       const gradesResponse = await fetch("/api/grades");
       const gradesData = await gradesResponse.json();
       setGrades(gradesData);
+
+      // Initialize slider values with default or saved grades
+      const initialValues: Record<number, number> = {};
+      gradesData.forEach((g: Grade) => {
+        initialValues[g.questionId] = g.score;
+      });
+      setSliderValues(initialValues);
     };
     fetchData();
   }, []);
 
-  // Add a new question to the database
   const addQuestion = async () => {
     if (!newQuestion.trim()) return;
 
@@ -50,8 +57,9 @@ export default function Home() {
     }
   };
 
-  // Save grade to the database
   const saveGrade = async (questionId: number, score: number) => {
+    setSliderValues((prev) => ({ ...prev, [questionId]: score }));
+
     const response = await fetch("/api/grades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -60,74 +68,79 @@ export default function Home() {
 
     if (response.ok) {
       const savedGrade = await response.json();
-      setGrades([...grades, savedGrade]);
+      setGrades((prev) => [...prev.filter((g) => g.questionId !== questionId), savedGrade]);
     }
   };
 
   return (
-    <main className="text-center text-white">
-      <h1 className="text-3xl my-4">Grade App with Sliders and Swipeable Cards</h1>
+    <VantaBackground>
+      <main className="max-w-4xl mx-auto p-6 text-white">
+        <h1 className="text-3xl font-bold mb-6">Accountability Grade App</h1>
 
-      {/* Questions and Sliders */}
-      <table className="w-full text-center bg-opacity-10 border border-white border-opacity-20">
-        <thead>
-          <tr>
-            <th>Question</th>
-            <th>Score (0-100)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {questions.map((q) => (
-            <tr key={q.id}>
-              <td>{q.text}</td>
-              <td>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue="50"
-                  className="slider"
-                  onChange={(e) => saveGrade(q.id, parseInt(e.target.value, 10))}
-                />
-                <span>{grades.find((g) => g.questionId === q.id)?.score ?? 50}</span>
-              </td>
+        {/* Questions and Sliders */}
+        <table className="w-full text-left bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+          <thead>
+            <tr>
+              <th className="p-4 text-gray-400">Question</th>
+              <th className="p-4 text-gray-400">Score (0-100)</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {questions.map((q) => (
+              <tr key={q.id} className="border-t border-gray-700">
+                <td className="p-4">{q.text}</td>
+                <td className="p-4 flex items-center space-x-4">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={sliderValues[q.id] || 50}
+                    className="slider w-full"
+                    onChange={(e) => {
+                      const score = parseInt(e.target.value, 10);
+                      saveGrade(q.id, score);
+                    }}
+                  />
+                  <span>{sliderValues[q.id] || 50}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      {/* Add a new question */}
-      <div className="my-4">
-        <input
-          type="text"
-          placeholder="Add a new question"
-          value={newQuestion}
-          onChange={(e) => setNewQuestion(e.target.value)}
-          className="border p-2"
-        />
-        <button
-          onClick={addQuestion}
-          className="bg-blue-500 text-white px-4 py-2 ml-2"
-        >
-          Add Question
-        </button>
-      </div>
+        {/* Add a New Question */}
+        <div className="mt-6 flex items-center space-x-4">
+          <input
+            type="text"
+            placeholder="Add a new question"
+            value={newQuestion}
+            onChange={(e) => setNewQuestion(e.target.value)}
+            className="flex-1 p-2 bg-gray-800 border border-gray-700 rounded text-gray-200"
+          />
+          <button
+            onClick={addQuestion}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500"
+          >
+            Add Question
+          </button>
+        </div>
 
-      {/* Swipeable Cards for Grades */}
-      <div className="mt-8 flex overflow-x-scroll">
-        {grades.map((grade) => {
-          const question = questions.find((q) => q.id === grade.questionId);
-          return (
-            <div
-              key={grade.id}
-              className="bg-gray-800 text-white p-4 m-2 rounded-lg shadow-md min-w-[200px]"
-            >
-              <h3 className="font-bold">{question?.text || "Unknown Question"}</h3>
-              <p>Score: {grade.score}</p>
-            </div>
-          );
-        })}
-      </div>
-    </main>
+        {/* Swipeable Cards for Grades */}
+        <div className="mt-8 flex overflow-x-scroll space-x-4">
+          {grades.map((grade) => {
+            const question = questions.find((q) => q.id === grade.questionId);
+            return (
+              <div
+                key={grade.id}
+                className="bg-gray-800 text-white p-6 rounded-lg shadow-md min-w-[200px]"
+              >
+                <h3 className="font-bold">{question?.text || "Unknown Question"}</h3>
+                <p>Score: {grade.score}</p>
+              </div>
+            );
+          })}
+        </div>
+      </main>
+    </VantaBackground>
   );
 }
