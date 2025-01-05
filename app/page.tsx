@@ -20,23 +20,13 @@ export default function Home() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [newQuestion, setNewQuestion] = useState("");
   const [sliderValues, setSliderValues] = useState<Record<number, number>>({});
+  const [shouldCalculate, setShouldCalculate] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       const questionResponse = await fetch("/api/questions");
       const questionsData = await questionResponse.json();
       setQuestions(questionsData);
-
-      const gradesResponse = await fetch("/api/grades");
-      const gradesData = await gradesResponse.json();
-      setGrades(gradesData);
-
-      // Initialize slider values with default or saved grades
-      const initialValues: Record<number, number> = {};
-      gradesData.forEach((g: Grade) => {
-        initialValues[g.questionId] = g.score;
-      });
-      setSliderValues(initialValues);
     };
     fetchData();
   }, []);
@@ -57,19 +47,23 @@ export default function Home() {
     }
   };
 
-  const saveGrade = async (questionId: number, score: number) => {
-    setSliderValues((prev) => ({ ...prev, [questionId]: score }));
-
-    const response = await fetch("/api/grades", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ questionId, score }),
-    });
-
-    if (response.ok) {
-      const savedGrade = await response.json();
-      setGrades((prev) => [...prev.filter((g) => g.questionId !== questionId), savedGrade]);
+  const calculateGrade = async () => {
+    console.log("Calculating grade...");
+    setShouldCalculate(true);
+    // Save grades to the API
+    for (const questionId in sliderValues) {
+      const score = sliderValues[questionId];
+      await fetch("/api/grades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: parseInt(questionId), score }),
+      });
     }
+
+    // Fetch grades after saving
+    const gradesResponse = await fetch("/api/grades");
+    const gradesData = await gradesResponse.json();
+    setGrades(gradesData);
   };
 
   return (
@@ -98,7 +92,7 @@ export default function Home() {
                     className="slider w-full"
                     onChange={(e) => {
                       const score = parseInt(e.target.value, 10);
-                      saveGrade(q.id, score);
+                      setSliderValues((prev) => ({ ...prev, [q.id]: score }));
                     }}
                   />
                   <span>{sliderValues[q.id] || 50}</span>
@@ -107,6 +101,16 @@ export default function Home() {
             ))}
           </tbody>
         </table>
+
+        {/* Calculate Grade Button */}
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={calculateGrade}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500"
+          >
+            Calculate Grade
+          </button>
+        </div>
 
         {/* Add a New Question */}
         <div className="mt-6 flex items-center space-x-4">
@@ -126,20 +130,22 @@ export default function Home() {
         </div>
 
         {/* Swipeable Cards for Grades */}
-        <div className="mt-8 flex overflow-x-scroll space-x-4">
-          {grades.map((grade) => {
-            const question = questions.find((q) => q.id === grade.questionId);
-            return (
-              <div
-                key={grade.id}
-                className="bg-gray-800 text-white p-6 rounded-lg shadow-md min-w-[200px]"
-              >
-                <h3 className="font-bold">{question?.text || "Unknown Question"}</h3>
-                <p>Score: {grade.score}</p>
-              </div>
-            );
-          })}
-        </div>
+        {shouldCalculate && (
+          <div className="mt-8 flex overflow-x-scroll space-x-4">
+            {grades.map((grade) => {
+              const question = questions.find((q) => q.id === grade.questionId);
+              return (
+                <div
+                  key={grade.id}
+                  className="bg-gray-800 text-white p-6 rounded-lg shadow-md min-w-[200px]"
+                >
+                  <h3 className="font-bold">{question?.text || "Unknown Question"}</h3>
+                  <p>Score: {grade.score}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
     </VantaBackground>
   );
